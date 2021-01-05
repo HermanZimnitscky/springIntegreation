@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:int="http://www.springframework.org/schema/integration"
+       xmlns:int-http="http://www.springframework.org/schema/integration/http"
+       xsi:schemaLocation="
+    http://www.springframework.org/schema/beans
+    http://www.springframework.org/schema/beans/spring-beans.xsd
+    http://www.springframework.org/schema/integration
+    http://www.springframework.org/schema/integration/spring-integration.xsd
+    http://www.springframework.org/schema/integration/http
+    http://www.springframework.org/schema/integration/http/spring-integration-http.xsd">
+
+
+    <int-http:outbound-gateway
+            url="http://localhost:11000/stocklevels/{hause}"
+            request-channel="postChanel"
+            http-method="POST"
+            expected-response-type-expression="headers.get('expectedType')"
+            reply-channel="convertChanelForPost">
+        <int-http:uri-variable name="hause" expression="headers.get('url')"/>
+    </int-http:outbound-gateway>
+
+
+    <int-http:outbound-gateway
+            url="http://localhost:11000/stocklevels/{hause}/{product}"
+            request-channel="getChanel"
+            http-method="GET"
+            reply-channel="convertChanel"
+            expected-response-type="com.example.demo.data.ProductData">
+        <int-http:uri-variable name="hause" expression="payload.productCode"/>
+        <int-http:uri-variable name="product" expression="payload.wareHauseCode"/>
+    </int-http:outbound-gateway>
+
+    <int:channel id="convertChanel"/>
+
+    <int:channel id="convertChanelForPost"/>
+
+    <int:channel id="outputConvertChanel"/>
+
+
+    <int:transformer id="testTransformer"
+                     input-channel="convertChanel"
+                     method="transformToAmaunt"
+                     ref="payloadTransformer"
+                     output-channel="outputConvertChanel">
+    </int:transformer>
+
+
+    <int:transformer id="testTransformerforList"
+                     input-channel="convertChanelForPost"
+                     method="transformListToAmaunt"
+                     ref="payloadAllTransformer"
+                     output-channel="outputConvertChanel">
+    </int:transformer>
+
+
+    <bean id="payloadTransformer" class="com.example.demo.integration.PayloadTransformer"/>
+    <bean id="payloadAllTransformer" class="com.example.demo.integration.PayloadAllTransformer"/>
+    <bean id="myErrorHandler" class="com.example.demo.integration.ErrorHandler"/>
+
+    <int:payload-type-router input-channel="chanel">
+        <int:mapping type="com.example.demo.data.ProductsWrapper" channel="postChanel"/>
+        <int:mapping type="com.example.demo.data.PayloadData" channel="getChanel"/>
+    </int:payload-type-router>
+
+
+    <int:channel id="postChanel"/>
+    <int:channel id="getChanel"/>
+
+    <int:payload-type-router input-channel="outputConvertChanel">
+        <int:mapping type="java.lang.Integer" channel="finalChanel"/>
+        <int:mapping type="java.util.List" channel="finalChanel"/>
+    </int:payload-type-router>
+
+    <int:channel id="finalChanel"/>
+
+    <int:channel id="errorsChanel"/>
+
+    <int:gateway id="httpGet" service-interface="com.example.demo.integration.ProductGateway"
+                 default-request-channel="chanel"
+                 error-channel="errorsChanel"
+                 default-reply-channel="finalChanel">
+        <int:method name="getTotal">
+            <int:header name="Content-Type" value="application/json"/>
+        </int:method>
+        <int:method name="getTotals">
+            <int:header name="Content-Type" value="application/json"/>
+        </int:method>
+    </int:gateway>
+
+    <int:service-activator input-channel="errorsChanel" ref="myErrorHandler"/>
+    <int:channel id="chanel"/>
+
+</beans>
